@@ -2,6 +2,14 @@
 name = "dup-cli"
 version = "0.1.0"
 edition = "2021"
+authors = ["D. Doffy <cuongnsm@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "A tool to upload multiple files to a server"
+readme = "README.md"
+homepage = "https://github.com/ddofy/dup-cli"
+repository = "https://github.com/ddofy/dup-cli"
+keywords = ["cli", "upload", "file", "dup"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 reqwest = { version = "0.12.12", features = ["multipart", "blocking"] }
