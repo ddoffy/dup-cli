@@ -1,9 +1,25 @@
 use reqwest::multipart;
 use std::error::Error;
+use std::io::{stdin, BufRead, IsTerminal};
+use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() {
-    let args = Cli::from_args();
+    let mut args = Cli::from_args();
+
+    if args.path.is_empty() {
+        if stdin().is_terminal() {
+            eprintln!("No files or directories provided");
+            ::std::process::exit(2);
+        }
+
+        args.path = stdin()
+            .lock()
+            .lines()
+            .filter_map(|line| line.ok())
+            .map(PathBuf::from)
+            .collect();
+    }
 
     // read Url from environment variable
     let url = match std::env::var("UPLOAD_URL") {
@@ -26,6 +42,7 @@ async fn main() {
     }
 
     let mut handles = vec![];
+
     for path in paths {
         let url_clone = url.clone();
         let handle = tokio::spawn(async move {
@@ -37,6 +54,20 @@ async fn main() {
     for handle in handles {
         handle.await.unwrap();
     }
+
+    //for path in paths {
+    //    let url_clone = url.clone();
+    //    let handle = std::thread::spawn(move || {
+    //        tokio::runtime::Runtime::new().unwrap().block_on(async {
+    //            handle_upload_file(path, &url_clone).await;
+    //        });
+    //    });
+    //    handles.push(handle);
+    //}
+    //
+    //for handle in handles {
+    //    handle.join().unwrap();
+    //}
 }
 
 fn handle_path(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
@@ -84,10 +115,11 @@ struct Cli {
 
 impl Cli {
     fn from_args() -> Self {
-        let mut path = Vec::new();
-        for arg in std::env::args().skip(1) {
-            path.push(std::path::PathBuf::from(arg));
-        }
+        let args = std::env::args();
+        let path = args
+            .skip(1)
+            .map(std::path::PathBuf::from)
+            .collect::<Vec<std::path::PathBuf>>();
         Self { path }
     }
 }
