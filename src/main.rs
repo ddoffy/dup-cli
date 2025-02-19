@@ -1,38 +1,21 @@
-use reqwest::multipart;
-use std::error::Error;
-use std::io::{stdin, BufRead, IsTerminal};
-use std::path::PathBuf;
+use crate::uploader::Uploader;
+use crate::cli::Cli;
+
+pub mod cli;
+pub mod uploader;
 
 #[tokio::main]
 async fn main() {
     let mut args = Cli::from_args();
 
-    if args.path.is_empty() {
-        if stdin().is_terminal() {
-            eprintln!("No files or directories provided");
-            ::std::process::exit(2);
-        }
-
-        args.path = stdin()
-            .lock()
-            .lines()
-            .filter_map(|line| line.ok())
-            .map(PathBuf::from)
-            .collect();
+    if let Err(err) = args.validate() {
+        eprintln!("Error: {}", err);
+        ::std::process::exit(1);
     }
-
-    // read Url from environment variable
-    let url = match std::env::var("UPLOAD_URL") {
-        Ok(url) => url,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            return;
-        }
-    };
 
     let mut paths = vec![];
     // print full path of each file
-    for path in args.path {
+    for path in args.paths {
         match std::fs::canonicalize(&path) {
             Ok(full_path) => {
                 handle_path(full_path, &mut paths);
@@ -44,30 +27,19 @@ async fn main() {
     let mut handles = vec![];
 
     for path in paths {
-        let url_clone = url.clone();
-        let handle = tokio::spawn(async move {
-            handle_upload_file(path, &url_clone).await;
+        let url_clone = args.host.clone();
+        let category = args.category.clone();
+        let handle = std::thread::spawn(move || {
+            tokio::runtime::Runtime::new().unwrap().block_on(async {
+                handle_upload_file(path, &url_clone, category).await;
+            });
         });
         handles.push(handle);
     }
 
     for handle in handles {
-        handle.await.unwrap();
+        handle.join().unwrap();
     }
-
-    //for path in paths {
-    //    let url_clone = url.clone();
-    //    let handle = std::thread::spawn(move || {
-    //        tokio::runtime::Runtime::new().unwrap().block_on(async {
-    //            handle_upload_file(path, &url_clone).await;
-    //        });
-    //    });
-    //    handles.push(handle);
-    //}
-    //
-    //for handle in handles {
-    //    handle.join().unwrap();
-    //}
 }
 
 fn handle_path(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
@@ -80,9 +52,20 @@ fn handle_path(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-async fn handle_upload_file(path: std::path::PathBuf, url: &str) {
-    let uploader = Uploader::new(url);
+async fn handle_upload_file(path: std::path::PathBuf, url: &str, kind_of_upload: uploader::KindOfUpload) {
+    let mut uploader = Uploader::new(url);
     println!("Starting upload of {}", path.display());
+
+    if kind_of_upload == uploader::KindOfUpload::Binary{
+        match uploader.add_header("Content-Type".to_string(), "application/octet-stream".to_string()) {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error: {}", e),
+        }
+        match uploader.add_header("X-Filename".to_string(), path.file_name().unwrap().to_str().unwrap().to_string()) {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error: {}", e),
+        }
+    }
 
     match uploader.upload_file(&path).await {
         Ok(_) => println!("Upload of {} successful", path.display()),
@@ -108,58 +91,3 @@ fn handle_dir(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-#[derive(Debug)]
-struct Cli {
-    path: Vec<std::path::PathBuf>,
-}
-
-impl Cli {
-    fn from_args() -> Self {
-        let args = std::env::args();
-        let path = args
-            .skip(1)
-            .map(std::path::PathBuf::from)
-            .collect::<Vec<std::path::PathBuf>>();
-        Self { path }
-    }
-}
-
-struct Uploader {
-    client: reqwest::Client,
-    url: String,
-}
-
-impl Uploader {
-    fn new(url: &str) -> Self {
-        Self {
-            client: reqwest::Client::builder().build().ok().unwrap(),
-            url: url.to_string(),
-        }
-    }
-
-    async fn upload_file(&self, path: &std::path::Path) -> Result<(), Box<dyn Error>> {
-        let file_name = path
-            .file_name()
-            .ok_or("Failed to get file name")?
-            .to_string_lossy()
-            .to_string();
-
-        // Create multipart form with file
-        let form = multipart::Form::new().part(
-            "file",
-            multipart::Part::bytes(std::fs::read(path)?).file_name(file_name),
-        );
-
-        let request = self.client.post(&self.url).multipart(form);
-
-        // Send request
-        let response = request.send().await?;
-
-        // Check if request was successful
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            Err(format!("Request failed with status: {}", response.status()).into())
-        }
-    }
-}

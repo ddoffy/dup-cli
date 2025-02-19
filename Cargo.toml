@@ -15,3 +15,4 @@ categories = ["command-line-utilities"]
 reqwest = { version = "0.12.12", features = ["multipart", "blocking"] }
 tokio = { version = "1.43.0", features = ["full"] }
 futures = "0.3.31"
+clap = { version = "4.5.30", features = ["derive"] }
