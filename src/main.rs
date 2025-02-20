@@ -1,6 +1,5 @@
 use crate::cli::Cli;
 use crate::uploader::Uploader;
-
 pub mod cli;
 pub mod uploader;
 
@@ -30,8 +29,10 @@ async fn main() {
         let url_clone = args.host.clone();
         let category = args.category.clone();
         let handle = std::thread::spawn(move || {
-            tokio::runtime::Runtime::new().unwrap().block_on(async {
-                handle_upload_file(path, &url_clone, category).await;
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+
+            runtime.block_on(async {
+                let _ = handle_upload_file(path, &url_clone, category).await;
             });
         });
         handles.push(handle);
@@ -56,7 +57,7 @@ async fn handle_upload_file(
     path: std::path::PathBuf,
     url: &str,
     kind_of_upload: uploader::KindOfUpload,
-) {
+)  -> Result<(), Box<dyn std::error::Error>> {
     let mut uploader = Uploader::new(url);
     println!("Starting upload of {}", path.display());
 
@@ -80,9 +81,22 @@ async fn handle_upload_file(
     match uploader.upload_file(&path).await {
         Ok(res) => {
             println!("Upload of {} successful", path.display());
+            // check if res is json, text print it
+            match res.text().await {
+                Ok(text) => {
+                    println!("You can download with this link: {}", text);
+                }
+                Err(e) => eprintln!("Error: {}", e),
+            }
         }
-        Err(e) => eprintln!("Error: {}", e),
-    }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            return Err(e);
+        }
+
+    };
+
+    Ok(())
 }
 
 fn handle_dir(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {

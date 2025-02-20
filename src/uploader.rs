@@ -3,16 +3,12 @@ use reqwest::multipart;
 use reqwest::Client;
 use std::error::Error;
 
-#[derive(Debug, PartialEq)]
+
+#[derive(Debug, PartialEq, Default)]
 pub enum KindOfUpload {
+    #[default]
     Multipart,
     Binary,
-}
-
-impl Default for KindOfUpload {
-    fn default() -> Self {
-        KindOfUpload::Multipart
-    }
 }
 
 impl Clone for KindOfUpload {

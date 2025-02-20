@@ -61,7 +61,7 @@ impl Cli {
             self.paths = stdin()
                 .lock()
                 .lines()
-                .filter_map(|line| line.ok())
+                .map_while(|line| line.ok())
                 .map(PathBuf::from)
                 .collect();
         }
