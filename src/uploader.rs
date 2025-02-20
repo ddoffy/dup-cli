@@ -41,7 +41,10 @@ impl Uploader {
         }
     }
 
-    pub async fn upload_file(self, path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    pub async fn upload_file(
+        self,
+        path: &std::path::Path,
+    ) -> Result<reqwest::Response, Box<dyn Error>> {
         let file_name = path
             .file_name()
             .ok_or("Failed to get file name")?
@@ -78,7 +81,7 @@ impl Uploader {
 
         // Check if request was successful
         if response.status().is_success() {
-            Ok(())
+            Ok(response)
         } else {
             Err(format!("Request failed with status: {}", response.status()).into())
         }

@@ -1,5 +1,5 @@
-use crate::uploader::Uploader;
 use crate::cli::Cli;
+use crate::uploader::Uploader;
 
 pub mod cli;
 pub mod uploader;
@@ -52,23 +52,35 @@ fn handle_path(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-async fn handle_upload_file(path: std::path::PathBuf, url: &str, kind_of_upload: uploader::KindOfUpload) {
+async fn handle_upload_file(
+    path: std::path::PathBuf,
+    url: &str,
+    kind_of_upload: uploader::KindOfUpload,
+) {
     let mut uploader = Uploader::new(url);
     println!("Starting upload of {}", path.display());
 
-    if kind_of_upload == uploader::KindOfUpload::Binary{
-        match uploader.add_header("Content-Type".to_string(), "application/octet-stream".to_string()) {
+    if kind_of_upload == uploader::KindOfUpload::Binary {
+        match uploader.add_header(
+            "Content-Type".to_string(),
+            "application/octet-stream".to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => eprintln!("Error: {}", e),
         }
-        match uploader.add_header("X-Filename".to_string(), path.file_name().unwrap().to_str().unwrap().to_string()) {
+        match uploader.add_header(
+            "X-Filename".to_string(),
+            path.file_name().unwrap().to_str().unwrap().to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => eprintln!("Error: {}", e),
         }
     }
 
     match uploader.upload_file(&path).await {
-        Ok(_) => println!("Upload of {} successful", path.display()),
+        Ok(res) => {
+            println!("Upload of {} successful", path.display());
+        }
         Err(e) => eprintln!("Error: {}", e),
     }
 }
@@ -90,4 +102,3 @@ fn handle_dir(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
         Err(e) => eprintln!("Error: {}", e),
     }
 }
-
