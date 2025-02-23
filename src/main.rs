@@ -103,7 +103,7 @@ fn file_size_human_readable(file_size: u64) -> String {
 async fn handle_upload_file(
     path: std::path::PathBuf,
     url: &str,
-    kind_of_upload: uploader::KindOfUpload,
+    kind_of_upload: cli::KindOfUpload,
     tx: std::sync::mpsc::Sender<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let time = std::time::Instant::now();
@@ -114,7 +114,7 @@ async fn handle_upload_file(
 
     println!("Starting upload of {} [{}]", path.display(), file_size);
 
-    if kind_of_upload == uploader::KindOfUpload::Binary {
+    if kind_of_upload == cli::KindOfUpload::Binary {
         match uploader.add_header(
             "Content-Type".to_string(),
             "application/octet-stream".to_string(),
@@ -158,7 +158,7 @@ async fn handle_upload_file(
 async fn handle_upload_file_with_progress(
     path: std::path::PathBuf,
     url: &str,
-    kind_of_upload: uploader::KindOfUpload,
+    kind_of_upload: cli::KindOfUpload,
     tx: std::sync::mpsc::Sender<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let time = std::time::Instant::now();
@@ -169,7 +169,7 @@ async fn handle_upload_file_with_progress(
 
     println!("Starting upload of {} [{}]", path.display(), file_size);
 
-    if kind_of_upload == uploader::KindOfUpload::Binary {
+    if kind_of_upload == cli::KindOfUpload::Binary {
         match uploader.add_header(
             "Content-Type".to_string(),
             "application/octet-stream".to_string(),

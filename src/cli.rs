@@ -2,9 +2,22 @@ use clap::Parser;
 use std::error::Error;
 use std::io::{stdin, BufRead, IsTerminal};
 use std::path::PathBuf;
-use crate::uploader::KindOfUpload;
 
-// impl from_str for KindOfUpload {
+#[derive(Debug, PartialEq, Default)]
+pub enum KindOfUpload {
+    #[default]
+    Multipart,
+    Binary,
+}
+
+impl Clone for KindOfUpload {
+    fn clone(&self) -> Self {
+        match self {
+            KindOfUpload::Multipart => KindOfUpload::Multipart,
+            KindOfUpload::Binary => KindOfUpload::Binary,
+        }
+    }
+}
 
 impl std::str::FromStr for KindOfUpload {
     type Err = String;

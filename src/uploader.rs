@@ -1,5 +1,3 @@
-// use bytes::Bytes;
-// use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::header::HeaderMap;
 use reqwest::multipart;
@@ -11,6 +9,7 @@ use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncRead, BufReader};
 use tokio::sync::Mutex;
 use tokio_util::io::ReaderStream;
+use crate::cli::{KindOfUpload};
 
 struct ProgressReader<R> {
     inner: R,
@@ -37,22 +36,6 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
             }
         }
         poll_result
-    }
-}
-
-#[derive(Debug, PartialEq, Default)]
-pub enum KindOfUpload {
-    #[default]
-    Multipart,
-    Binary,
-}
-
-impl Clone for KindOfUpload {
-    fn clone(&self) -> Self {
-        match self {
-            KindOfUpload::Multipart => KindOfUpload::Multipart,
-            KindOfUpload::Binary => KindOfUpload::Binary,
-        }
     }
 }
 
