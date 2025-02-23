@@ -4,8 +4,7 @@ version = "0.1.4"
 edition = "2025"
 authors = ["D. Doffy <cuongnsm@gmail.com>"]
 license = "MIT OR Apache-2.0"
-description = "A tool to upload multiple files to a server, support tracking
-progress"
+description = "A tool to upload multiple files to a server, support tracking progress"
 readme = "README.md"
 homepage = "https://github.com/ddofy/dup-cli"
 repository = "https://github.com/ddofy/dup-cli"
