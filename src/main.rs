@@ -137,7 +137,7 @@ async fn handle_upload_file(
                     "Error".to_string()
                 }
             };
-            println!("[{}s][{}][{}] - Doanload: {}", time.elapsed().as_secs(), path.display(), file_size, download_link);
+            println!("[{}s][{}][{}] - Download: {}", time.elapsed().as_secs(), path.display(), file_size, download_link);
             // check if res is json, text print it
         }
         Err(e) => {
