@@ -1,5 +1,9 @@
 use crate::cli::Cli;
 use crate::uploader::Uploader;
+use std::sync::Arc;
+use indicatif::{MultiProgress};
+
+
 pub mod cli;
 pub mod uploader;
 
@@ -25,14 +29,18 @@ async fn main() {
 
     let mut handles = vec![];
 
+    let mp = Uploader::new_multi_progress_bar();
+
     for path in paths {
         let url_clone = args.host.clone();
         let category = args.category.clone();
+        let chunk_size = args.chunk_size.clone();
+        let mp_clone = Arc::clone(&mp);
         let handle = std::thread::spawn(move || {
             let runtime = tokio::runtime::Runtime::new().unwrap();
 
             runtime.block_on(async {
-                let _ = handle_upload_file(path, &url_clone, category).await;
+                let _ = handle_upload_file(path, &url_clone, category, mp_clone, chunk_size).await;
             });
         });
         handles.push(handle);
@@ -57,6 +65,8 @@ async fn handle_upload_file(
     path: std::path::PathBuf,
     url: &str,
     kind_of_upload: uploader::KindOfUpload,
+    mp: Arc<MultiProgress>,
+    chunk_size: Option<usize>,
 )  -> Result<(), Box<dyn std::error::Error>> {
     let mut uploader = Uploader::new(url);
     println!("Starting upload of {}", path.display());
@@ -78,11 +88,11 @@ async fn handle_upload_file(
         }
     }
 
-    match uploader.upload_file(&path).await {
+    match uploader.upload_file(&path, mp, chunk_size).await {
         Ok(res) => {
             println!("Upload of {} successful", path.display());
             // check if res is json, text print it
-            match res.text().await {
+            match res.text() {
                 Ok(text) => {
                     println!("You can download with this link: {}", text);
                 }

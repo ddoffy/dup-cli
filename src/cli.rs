@@ -31,6 +31,8 @@ pub struct Cli {
         required = false
     )]
     pub category: KindOfUpload,
+    #[clap(short = 's', long = "chunk-size", required = false)]
+    pub chunk_size: Option<usize>,
     // token to authenticate
     #[clap(short = 't', long = "token", required = false, default_value = "")]
     pub token: String,
