@@ -1,13 +1,13 @@
 [package]
 name = "dup-cli"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 authors = ["D. Doffy <cuongnsm@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "A tool to upload multiple files to a server, support tracking progress"
 readme = "README.md"
-homepage = "https://github.com/ddofy/dup-cli"
-repository = "https://github.com/ddofy/dup-cli"
+homepage = "https://github.com/ddoffy/dup-cli"
+repository = "https://github.com/dddofy/dup-cli"
 keywords = ["cli", "upload", "file", "dup"]
 categories = ["command-line-utilities"]
 
