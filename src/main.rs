@@ -1,5 +1,6 @@
 use crate::cli::Cli;
 use crate::uploader::Uploader;
+
 pub mod cli;
 pub mod uploader;
 
@@ -28,24 +29,33 @@ async fn main() {
 
     let mut handles = vec![];
 
-    for path in paths {
-        let url_clone = args.host.clone();
-        let category = args.category.clone();
-        let tx_clone = tx.clone();
-        let handle = std::thread::spawn(move || {
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-
-            runtime.block_on(async {
-                let _ = handle_upload_file(path, &url_clone, category, tx_clone).await;
-            });
-        });
-        handles.push(handle);
-    }
-
     let total_time = std::time::Instant::now();
 
-    for handle in handles {
-        handle.join().unwrap();
+    if args.progress {
+        for path in paths {
+            let url_clone = args.host.clone();
+            let category = args.category.clone();
+            let tx_clone = tx.clone();
+            let _ = handle_upload_file_with_progress(path, &url_clone, category, tx_clone).await;
+        }
+    } else {
+        for path in paths {
+            let url_clone = args.host.clone();
+            let category = args.category.clone();
+            let tx_clone = tx.clone();
+            let handle = std::thread::spawn(move || {
+                let runtime = tokio::runtime::Runtime::new().unwrap();
+
+                runtime.block_on(async {
+                    let _ = handle_upload_file(path, &url_clone, category, tx_clone).await;
+                });
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
     }
 
     let total_time = total_time.elapsed().as_secs();
@@ -54,22 +64,18 @@ async fn main() {
 
     let mut total_size = 0;
     // drain the channel to sum total file size
-    loop {
-        match rx.try_recv() {
-            Ok(size) => {
-                total_size += size;
-            }
-            Err(_) => {
-                break;
-            }
-        }
+    while let Ok(size) = rx.try_recv() {
+        total_size += size;
     }
 
     println!("Total size: {}", file_size_human_readable(total_size));
 
     // the average speed of the upload
     let average_speed = total_size as f64 / total_time as f64;
-    println!("Average speed: {}/s", file_size_human_readable(average_speed as u64));
+    println!(
+        "Average speed: {}/s",
+        file_size_human_readable(average_speed as u64)
+    );
 }
 
 fn handle_path(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
@@ -83,7 +89,7 @@ fn handle_path(path: std::path::PathBuf, paths: &mut Vec<std::path::PathBuf>) {
 }
 
 fn file_size_human_readable(file_size: u64) -> String {
-    let file_size = if file_size <= 1024 {
+    if file_size <= 1024 {
         format!("{}B", file_size)
     } else if file_size <= 1024 * 1024 {
         format!("{:.2}KB", file_size as f64 / 1024.0)
@@ -91,8 +97,7 @@ fn file_size_human_readable(file_size: u64) -> String {
         format!("{:.2}MB", file_size as f64 / 1024.0 / 1024.0)
     } else {
         format!("{:.2}GB", file_size as f64 / 1024.0 / 1024.0 / 1024.0)
-    };
-    file_size
+    }
 }
 
 async fn handle_upload_file(
@@ -100,13 +105,13 @@ async fn handle_upload_file(
     url: &str,
     kind_of_upload: uploader::KindOfUpload,
     tx: std::sync::mpsc::Sender<u64>,
-)  -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let time = std::time::Instant::now();
     let mut uploader = Uploader::new(url);
     let file_size = std::fs::metadata(&path)?.len();
     tx.send(file_size).unwrap();
     let file_size = file_size_human_readable(file_size);
-        
+
     println!("Starting upload of {} [{}]", path.display(), file_size);
 
     if kind_of_upload == uploader::KindOfUpload::Binary {
@@ -128,23 +133,78 @@ async fn handle_upload_file(
 
     match uploader.upload_file(&path).await {
         Ok(res) => {
-
             let download_link = match res.text().await {
-                Ok(text) => {
-                    text
-                }
-                Err(_) => {
-                    "Error".to_string()
-                }
+                Ok(text) => text,
+                Err(_) => "Error".to_string(),
             };
-            println!("[{}s][{}][{}] - Download: {}", time.elapsed().as_secs(), path.display(), file_size, download_link);
+            println!(
+                "[{}s][{}][{}] - Download: {}",
+                time.elapsed().as_secs(),
+                path.display(),
+                file_size,
+                download_link
+            );
             // check if res is json, text print it
         }
         Err(e) => {
             eprintln!("[{}s] Error: {}", time.elapsed().as_secs(), e);
             return Err(e);
         }
+    };
 
+    Ok(())
+}
+
+async fn handle_upload_file_with_progress(
+    path: std::path::PathBuf,
+    url: &str,
+    kind_of_upload: uploader::KindOfUpload,
+    tx: std::sync::mpsc::Sender<u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let time = std::time::Instant::now();
+    let mut uploader = Uploader::new(url);
+    let file_size = std::fs::metadata(&path)?.len();
+    tx.send(file_size).unwrap();
+    let file_size = file_size_human_readable(file_size);
+
+    println!("Starting upload of {} [{}]", path.display(), file_size);
+
+    if kind_of_upload == uploader::KindOfUpload::Binary {
+        match uploader.add_header(
+            "Content-Type".to_string(),
+            "application/octet-stream".to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error: {}", e),
+        }
+        match uploader.add_header(
+            "X-Filename".to_string(),
+            path.file_name().unwrap().to_str().unwrap().to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error: {}", e),
+        }
+    }
+
+    match uploader.upload_file_with_progress(&path).await {
+        Ok(res) => {
+            let download_link = match res.text().await {
+                Ok(text) => text,
+                Err(_) => "Error".to_string(),
+            };
+            println!(
+                "[{}s][{}][{}] - Download: {}",
+                time.elapsed().as_secs(),
+                path.display(),
+                file_size,
+                download_link
+            );
+            // check if res is json, text print it
+        }
+        Err(e) => {
+            eprintln!("[{}s] Error: {}", time.elapsed().as_secs(), e);
+            return Err(e);
+        }
     };
 
     Ok(())

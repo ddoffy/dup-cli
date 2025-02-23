@@ -36,6 +36,9 @@ pub struct Cli {
     pub token: String,
     // paths to upload
     pub paths: Vec<std::path::PathBuf>,
+    // show progress
+    #[clap(short = 'p', long = "progress", required = false)]
+    pub progress: bool,
 }
 
 impl Cli {
