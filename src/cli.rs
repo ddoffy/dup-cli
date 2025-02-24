@@ -32,8 +32,8 @@ impl std::str::FromStr for KindOfUpload {
 }
 
 #[derive(Debug, Parser, Default)]
-#[clap(name = "Doffy uploader CLI", version = "0.1.6", author = "D. Doffy")]
-#[clap(about = "Upload files to a server")]
+#[clap(name = "Doffy uploader CLI", version = "0.1.7", author = "D. Doffy")]
+#[clap(about = "Upload files to server parallelly", long_about = "Upload files to server parallelly, that supports multipart and binarry uploads, with progress bar")]
 pub struct Cli {
     // host to upload to
     #[clap(short = 'H', long = "host", required = false, default_value = "")]
