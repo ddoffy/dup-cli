@@ -34,7 +34,6 @@ impl std::str::FromStr for KindOfUpload {
 #[derive(Debug, Parser, Default)]
 #[clap(name = "Doffy uploader CLI", version = "0.1.6", author = "D. Doffy")]
 #[clap(about = "Upload files to a server")]
-
 pub struct Cli {
     // host to upload to
     #[clap(short = 'H', long = "host", required = false, default_value = "")]
@@ -54,6 +53,9 @@ pub struct Cli {
     // show progress
     #[clap(short = 'p', long = "progress", required = false)]
     pub progress: bool,
+    // chunk size
+    #[clap(short = 's', long = "chunk-size", required = false)]
+    pub chunk_size: Option<usize>,
 }
 
 impl Cli {

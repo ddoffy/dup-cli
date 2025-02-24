@@ -5,11 +5,17 @@ use reqwest::{Body, Client, Response};
 use std::error::Error;
 use std::sync::Arc;
 use std::{path::Path};
-use tokio::fs::File as TokioFile;
-use tokio::io::{AsyncRead, BufReader};
+use tokio::fs::File;
+use tokio::io::{AsyncRead, BufReader, AsyncReadExt};
 use tokio::sync::Mutex;
 use tokio_util::io::ReaderStream;
 use crate::cli::{KindOfUpload};
+use tokio::task;
+use base64::{engine::general_purpose, Engine};
+use serde_json::json;
+use tokio::sync::Semaphore;
+
+const MAX_CONCURRENT_UPLOADS: usize = 32;
 
 struct ProgressReader<R> {
     inner: R,
@@ -131,7 +137,7 @@ impl Uploader {
         request = match self.kind_of_upload {
             KindOfUpload::Multipart => {
                 // open file for async reading
-                let async_file = TokioFile::open(path).await?;
+                let async_file = File::open(path).await?;
                 let reader = BufReader::new(async_file);
 
                 // wrap the stream in a progress reader
@@ -194,6 +200,101 @@ impl Uploader {
             reqwest::header::HeaderName::from_bytes(key.as_bytes())?,
             reqwest::header::HeaderValue::from_str(&value)?,
         );
+        Ok(())
+    }
+
+    pub async fn upload_file_with_chunk_size(
+        &self,
+        path: &std::path::Path,
+        chunk_size: usize,
+    ) -> Result<(), Box<dyn Error>> {
+
+        let file_metadata = std::fs::metadata(path)?;
+        let file_size = file_metadata.len();
+        let file_name = path
+            .file_name()
+            .ok_or("Failed to get file name")?
+            .to_string_lossy()
+            .to_string();
+
+        println!("Uploading file {} with chunk size {}", file_name, chunk_size);
+
+        let total_chunks = file_size.div_ceil(chunk_size as u64);
+
+        let file = Arc::new(tokio::sync::Mutex::new(File::open(path).await?));
+        let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_UPLOADS));
+
+        let mut tasks = vec![];
+
+        let client = self.client.clone();
+        let url = self.url.clone();
+
+        for chunk_id in 0..total_chunks {
+            let filename_clone = file_name.clone();
+            let client_clone = client.clone();
+            let url_clone = url.clone();
+            let file_clone = Arc::clone(&file);
+            let semaphore_clone = Arc::clone(&semaphore);
+
+            let task = task::spawn(async move {
+                
+                // limit concurrent uploads
+                let _permit = semaphore_clone.acquire().await.unwrap();
+
+                let mut file = file_clone.lock().await;
+                let mut buffer = vec![0; chunk_size];
+
+                // file.seek(SeekFrom::Start(chunk_id * chunk_size as u64)).await.unwrap();
+                // read chunk manually using read_exact where possible
+                let start_offset = chunk_id * chunk_size as u64;
+                let mut read_pos = start_offset;
+                let mut bytes_read = 0;
+                while bytes_read < chunk_size {
+                    match file.read(&mut buffer[bytes_read..]).await {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            bytes_read += n;
+                            read_pos += n as u64;
+                        }
+                        Err(e) => {
+                            eprintln!("Error reading file: {:?}", e);
+                            break;
+                        }
+                    }
+                }
+
+                buffer.truncate(bytes_read); // remove extra unused bytes
+                 
+                // Encode chunk in Base64 (required for JSON compatibility)
+                let encoded_data = general_purpose::STANDARD.encode(&buffer);
+
+                let payload = json!({
+                    "filename": filename_clone,
+                    "chunk_id": chunk_id,
+                    "total_chunks": total_chunks,
+                    "data": encoded_data,
+                });
+
+
+                let response = client_clone
+                    .post(url_clone)
+                    .json(&payload)
+                    .send()
+                    .await
+                    .unwrap();
+
+                println!("Chunk {} of {} uploaded: {:?}", chunk_id + 1, total_chunks, response.text().await.unwrap());
+            });
+
+            tasks.push(task);
+        }
+
+        for task in tasks {
+            task.await.unwrap();
+        }
+
+        println!("File {} uploaded successfully", file_name);
+        
         Ok(())
     }
 }

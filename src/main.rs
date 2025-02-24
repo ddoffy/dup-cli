@@ -38,6 +38,23 @@ async fn main() {
             let tx_clone = tx.clone();
             let _ = handle_upload_file_with_progress(path, &url_clone, category, tx_clone).await;
         }
+    } else if let Some(chunk_size) = args.chunk_size {
+        for path in paths {
+            let url_clone = args.host.clone();
+            let tx_clone = tx.clone();
+            let handle = std::thread::spawn(move || {
+                let runtime = tokio::runtime::Runtime::new().unwrap();
+
+                runtime.block_on(async {
+                    let _ = handle_upload_file_with_chunk_size(path, &url_clone, tx_clone, chunk_size).await;
+                });
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
     } else {
         for path in paths {
             let url_clone = args.host.clone();
@@ -198,6 +215,43 @@ async fn handle_upload_file_with_progress(
                 path.display(),
                 file_size,
                 download_link
+            );
+            // check if res is json, text print it
+        }
+        Err(e) => {
+            eprintln!("[{}s] Error: {}", time.elapsed().as_secs(), e);
+            return Err(e);
+        }
+    };
+
+    Ok(())
+}
+
+async fn handle_upload_file_with_chunk_size(
+    path: std::path::PathBuf,
+    url: &str,
+    tx: std::sync::mpsc::Sender<u64>,
+    chunk_size: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let time = std::time::Instant::now();
+    let uploader = Uploader::new(url);
+    let file_size = std::fs::metadata(&path)?.len();
+    tx.send(file_size).unwrap();
+    let file_size = file_size_human_readable(file_size);
+
+    println!("Starting upload of {} [{}]", path.display(), file_size);
+
+    match uploader.upload_file_with_chunk_size(&path, chunk_size).await {
+        Ok(_) => {
+            // let download_link = match res.text().await {
+            //     Ok(text) => text,
+            //     Err(_) => "Error".to_string(),
+            // };
+            println!(
+                "[{}s][{}][{}]",
+                time.elapsed().as_secs(),
+                path.display(),
+                file_size
             );
             // check if res is json, text print it
         }
