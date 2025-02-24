@@ -78,10 +78,21 @@ impl Uploader {
         request = match self.kind_of_upload {
             KindOfUpload::Multipart => {
                 // Create multipart form with file
-                let form = multipart::Form::new().part(
-                    "file",
-                    multipart::Part::bytes(std::fs::read(path)?).file_name(file_name),
-                );
+                let async_file = File::open(path).await?;
+                let reader = BufReader::new(async_file);
+
+                // convert the reader into a stream
+                let stream = ReaderStream::new(reader);
+
+                let body = Body::wrap_stream(stream);
+
+                let part = multipart::Part::stream(body)
+                    .file_name(file_name)
+                    .mime_str("application/octet-stream")?;
+                
+
+                let form = multipart::Form::new().part("file", part);
+
                 request.multipart(form)
             }
             KindOfUpload::Binary => {
@@ -247,14 +258,15 @@ impl Uploader {
                 // file.seek(SeekFrom::Start(chunk_id * chunk_size as u64)).await.unwrap();
                 // read chunk manually using read_exact where possible
                 let start_offset = chunk_id * chunk_size as u64;
-                let mut read_pos = start_offset;
+                let read_pos = Arc::new(Mutex::new(start_offset));
                 let mut bytes_read = 0;
                 while bytes_read < chunk_size {
                     match file.read(&mut buffer[bytes_read..]).await {
                         Ok(0) => break,
                         Ok(n) => {
                             bytes_read += n;
-                            read_pos += n as u64;
+                            let mut read_pos = read_pos.lock().await;
+                            *read_pos += n as u64;
                         }
                         Err(e) => {
                             eprintln!("Error reading file: {:?}", e);
